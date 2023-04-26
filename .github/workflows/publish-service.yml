@@ -1,4 +1,4 @@
-name: publish-service
+name: publish-container
 
 on:
   workflow_call:
