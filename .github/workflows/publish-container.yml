@@ -35,7 +35,7 @@ jobs:
       id: get-semantic-version-components
       shell: pwsh
       run: |
-        $semanticVersion = $env:GITHUB_REF.Split("refs/tags/")[1]
+        $semanticVersion = $env:GITHUB_REF -replace "refs/tags/", ""
         $majorVersion = $semanticVersion.Split('.')[0]
         $minorVersion = $semanticVersion.Split('.')[1]
         $patchVersion = $semanticVersion.Split('.')[2]
