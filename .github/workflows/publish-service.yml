@@ -1,0 +1,81 @@
+name: publish-service
+
+on:
+  workflow_call:
+    inputs:
+      imageName:
+        required: true
+        type: string
+      dockerRegistry:
+        type: string
+        default: "europe-west1-docker.pkg.dev/silvester-306016/the-farmer-docker/images"
+      dockerFilePath:  
+        type: string
+        default: "./Dockerfile"
+        
+    secrets:
+      dockerUsername: 
+        required: true
+      dockerPassword:
+        required: true     
+jobs:
+
+  get-semver:
+    runs-on: ubuntu-latest
+    outputs: 
+      semanticVersion: ${{ steps.get-semantic-version.outputs.group1 }}
+      majorVersion: ${{ steps.get-semantic-version-components.outputs.majorVersion }}
+      minorVersion: ${{ steps.get-semantic-version-components.outputs.minorVersion }}
+      patchVersion: ${{ steps.get-semantic-version-components.outputs.patchVersion }}
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675
+
+    - name: SEMVER - Components
+      id: get-semantic-version-components
+      shell: pwsh
+      run: |
+        $semanticVersion = $env:GITHUB_REF.Split("refs/tags/")[1]
+        $majorVersion = $semanticVersion.Split('.')[0]
+        $minorVersion = $semanticVersion.Split('.')[1]
+        $patchVersion = $semanticVersion.Split('.')[2]
+        "majorVersion=$majorVersion" >> $env:GITHUB_OUTPUT
+        "minorVersion=$minorVersion" >> $env:GITHUB_OUTPUT
+        "patchVersion=$patchVersion" >> $env:GITHUB_OUTPUT
+  
+  publish:
+    runs-on: ubuntu-latest
+    needs: get-semver
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675
+
+    - name: DOCKER - Login
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.dockerUsername }}
+        password: ${{ secrets.dockerPassword }}
+        registry: ${{ inputs.dockerRegistry }}
+    
+    - name: DOCKER - Setup QEMU
+      uses: docker/setup-qemu-action@v1
+
+    - name: DOCKER - Setup BuildX
+      uses: docker/setup-buildx-action@v1
+          
+    - name: DOCKER - Build and Push
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ${{ inputs.dockerFilePath }}
+        push: true 
+        build-args: |
+          NUGET_USERNAME=${{ secrets.nugetUsername }}
+          NUGET_PASSWORD=${{ secrets.nugetPassword }}
+          NUGET_REGISTRY=${{ inputs.nugetRegistry }}
+        tags: |
+          ${{ inputs.dockerRegistry }}/${{ inputs.imageName }}:${{ needs.get-semver.outputs.majorVersion }}
+          ${{ inputs.dockerRegistry }}/${{ inputs.imageName }}:${{ needs.get-semver.outputs.majorVersion }}.${{ needs.get-semver.outputs.minorVersion }}
+          ${{ inputs.dockerRegistry }}/${{ inputs.imageName }}:${{ needs.get-semver.outputs.majorVersion }}.${{ needs.get-semver.outputs.minorVersion }}.${{ needs.get-semver.outputs.patchVersion }}
+          ${{ inputs.dockerRegistry }}/${{ inputs.imageName }}:latest
+
